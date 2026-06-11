@@ -1,20 +1,34 @@
-# Entorno Virtual (¡Súper importante ignorarlo!)
+# === Entornos Virtuales ===
 venv/
 .venv/
 env/
 ENV/
+pyvenv.cfg
+include/
+lib/
+share/
 
-# Python (Archivos temporales compilados)
+# === Base de Datos Local (SQLite) ===
+*.db
+*.sqlite
+*.sqlite3
+
+# === Caché de Python (Crucial para evitar basura en los commits) ===
 **/__pycache__/
 *.pyc
 *.pyo
 *.pyd
+.pytest_cache/
 
-# Base de datos local (Evita subir tu SQLite local)
-*.db
-*.sqlite3
-
-# Configuraciones de VS Code o del sistema
+# === Configuraciones del Editor (VS Code / Cursor / PyCharm) ===
 .vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# === Archivos del Sistema Operativo ===
 .DS_Store
 Thumbs.db

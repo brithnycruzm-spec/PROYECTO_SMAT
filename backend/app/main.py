@@ -3,9 +3,11 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 import models
 from database import engine, get_db
-from pydantic import BaseModel
+import schemas
 from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
+from auth import crear_token_acceso, obtener_identidad_actual
+import crud
 
 app = FastAPI(
             title="Smat - Sistema de Monitoreo de Alerta Temprana",
@@ -44,21 +46,16 @@ models.Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Smat persistente")
 
 
-class EstacionCreate(BaseModel):
-    id: int
-    nombre: str
-    ubicacion: str
-db_estaciones = []
-db_lectura = []
-
-class LecturaCreate(BaseModel):
-    
-    valor: float
-    estacion_id: int
-
 @app.get("/")
 async def root():
     return {"status": "success","plataforma":"UNMSM", "servicio":"Smat","message": "Bienvenido al Ecosistema Multiplataforma"}
+
+@app.post("/token",
+          tags=["Autenticación"],
+          summary="Obtener token de acceso",  
+          description="Genera un token JWT de acceso para autenticación en endpoints protegidos")
+async def login_para_tener_acceso():
+        return {"access_token": crear_token_acceso({"sub": "admin_smat"}), "token_type": "bearer"}
 
 @app.post("/estaciones/",status_code=201,
         responses = {
@@ -68,13 +65,21 @@ async def root():
         },
         tags=["Gestión de Estaciones"],
         summary="Registrar una nueva estación de monitoreo",
-        description="Permite crear una nueva estación física")
-def crear_estacion(estacion: EstacionCreate, db: Session = Depends(get_db)):
+        description="Permite crear una nueva estación física solo a personal autorizado")
+def crear_estacion(estacion: schemas.EstacionCreate, db: Session = Depends(get_db),
+                usuario: str = Depends(obtener_identidad_actual)):
+    estacion_existente = db.query(models.Estacion).filter(models.Estacion.id== estacion.id).first()
+    if estacion_existente:
+        raise HTTPException(
+            status_code= 400,
+            detail= f"La estación con el ID {estacion.id} ya se encuentra registrada."
+        )
     nueva_estacion = models.Estacion(id=estacion.id, nombre=estacion.nombre, ubicacion=estacion.ubicacion)
     db.add(nueva_estacion)
     db.commit()
     db.refresh(nueva_estacion)
-    return {"msj": "Estación guardada en DB", "data": nueva_estacion}
+    
+    return nueva_estacion 
 
 @app.get("/estaciones/stats",
          responses={
@@ -123,7 +128,7 @@ async def listar_estaciones(db: Session = Depends(get_db)):
         tags=["Telemetría de Sensores"],
         summary="Recibir datos de telemetría",
         description="Recibe el valor capturado por un sensor y lo víncula a una estación existente medante su ID")
-def registrar_lectura(lectura: LecturaCreate, db: Session = Depends(get_db)):
+def registrar_lectura(lectura: schemas.LecturaCreate, db: Session = Depends(get_db)):
     estacion = db.query(models.Estacion).filter(models.Estacion.id == lectura.estacion_id).first()
     if not estacion:
         raise HTTPException(status_code=404, detail="Estación no existe")
