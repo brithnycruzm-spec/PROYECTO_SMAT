@@ -1,10 +1,27 @@
-Semana 3:
-Agregamos models.py y database.py
-Instalamos sql : pip install sqlalchemy
+Semana 4:
 Creación de requerimientos : pip freeze > requirements.txt , extrae todo y lo guarda en requirements.txt, 
 se ejecuta dentro del backend.
 Para subir al repositorio los cambios, hacer:
 1. Modificas tu código.
 2.git add . (Preparas los archivos).
 3.git commit -m "Mi mensaje de cambio" (Guardas en tu PC).
-4.git push origin master
+4.git push origin master 
+Semana 4.2:
+Implementación de la app en main.py(licencia, nombre, contacto)
+Nos enfocamos en lo vizual para la mejor comprensión de la documentación, con:
+tags (organiza en bloques a los endopoints)
+summary (que es)
+description: breve resumen de qué hace el endpoint
+
+Extra sobre commits:
+ver commits guardados del reciente al más  antiguo:
+git log --oneline
+Caso (ver versiones pasadas):
+    git checkout serie.de.7.digitos
+    regresamos al presente con: git checkout master
+Caso (Regresar a versión pasada y borrar presente):
+    git reset --hard serie.de.7.digitos.del.commit              (at3ef3e algo así)
+
+SEMANA 4.3:
+    Implementación del CORS, seguridad middleware para conexión en app.
+    End point actualizado para resumen de registros y lecturas más altas.

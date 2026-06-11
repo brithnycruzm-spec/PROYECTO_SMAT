@@ -1,9 +1,11 @@
 from fastapi import Depends, FastAPI, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 import models
 from database import engine, get_db
 from pydantic import BaseModel
 from typing import List, Optional
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
             title="Smat - Sistema de Monitoreo de Alerta Temprana",
@@ -27,6 +29,17 @@ app = FastAPI(
                 "url": "https://www.apache.org/licenses/LICENSE-2.0.html",
             },
 )
+
+origins = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 models.Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Smat persistente")
 
@@ -63,16 +76,42 @@ def crear_estacion(estacion: EstacionCreate, db: Session = Depends(get_db)):
     db.refresh(nueva_estacion)
     return {"msj": "Estación guardada en DB", "data": nueva_estacion}
 
-@app.get("/estaciones/",
-         responses = {
-            200: {"description": "Listado de estaciones obtenido exitosamente"},
+@app.get("/estaciones/stats",
+         responses={
+            200: {"description": "Resumen ejecutivo obtenido exitosamente"},
             500: {"description": "Error interno del servidor"}
          },
          tags=["Gestión de Estaciones"],
-         summary="Listar todas las estaciones registradas",
-         description="Devuelve un listado completo de todas las estaciones de monitoreo registradas en el sistema")
+         summary="Listar todas las estaciones registradas con estadísticas",
+         description="Devuelve la cantidad total de estaciones, el listado original de SQL y la estación con la lectura más alta.")
 async def listar_estaciones(db: Session = Depends(get_db)):
-    return db.query(models.Estacion).all()
+    
+    
+    total_estaciones = db.query(models.Estacion).count()
+    
+    
+    lectura_maxima = db.query(func.max(models.LecturaDB.valor)).scalar()
+    estacion_record_alta = None
+    
+    if lectura_maxima is not None:
+        registro_maximo = db.query(models.LecturaDB).filter(models.LecturaDB.valor == lectura_maxima).first()
+        if registro_maximo:
+            estacion_obj = db.query(models.Estacion).filter(models.Estacion.id == registro_maximo.estacion_id).first()
+            if estacion_obj:
+                estacion_record_alta = {
+                    "estacion_id": estacion_obj.id,
+                    "nombre": estacion_obj.nombre,
+                    "lectura_mas_alta": lectura_maxima
+                }
+
+    
+    return {
+        "cantidad_total_estaciones": total_estaciones,
+        "estacion_con_lectura_mas_alta": estacion_record_alta if estacion_record_alta else "No hay lecturas registradas aún",
+        
+        
+        "estaciones": db.query(models.Estacion).all()
+    }
 
 @app.post("/lectura/",status_code=201,
         responses = {

@@ -1,0 +1,20 @@
+# Entorno Virtual (¡Súper importante ignorarlo!)
+venv/
+.venv/
+env/
+ENV/
+
+# Python (Archivos temporales compilados)
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Base de datos local (Evita subir tu SQLite local)
+*.db
+*.sqlite3
+
+# Configuraciones de VS Code o del sistema
+.vscode/
+.DS_Store
+Thumbs.db
