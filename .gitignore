@@ -1,3 +1,7 @@
+# =======================================================================
+# SMAT ECOSISTEMA - .GITIGNORE FUSIONADO (FastAPI + Flutter)
+# =======================================================================
+
 # === Entornos Virtuales ===
 venv/
 .venv/
@@ -20,9 +24,10 @@ share/
 *.pyd
 .pytest_cache/
 
-# === Configuraciones del Editor (VS Code / Cursor / PyCharm) ===
+# === Configuraciones del Editor (VS Code / Cursor / PyCharm / Android Studio) ===
 .vscode/
 .idea/
+*.iml
 *.suo
 *.ntvs*
 *.njsproj
@@ -32,3 +37,30 @@ share/
 # === Archivos del Sistema Operativo ===
 .DS_Store
 Thumbs.db
+
+# =======================================================================
+# NUEVO: COMPONENTES DE FLUTTER / MOBILE (Crucial para el Monorepo)
+# =======================================================================
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+
+# Ignorar las carpetas de compilación (reemplaza 'mobile' si tu carpeta tiene otro nombre)
+/mobile/build/
+/mobile/android/.gradle/
+/mobile/android/local.properties
+/mobile/android/app/Flutter/
+/mobile/android/app/libs/
+/mobile/android/app/src/main/java/io/flutter/plugins/
+
+# Ignorar los ejecutables generados
+*.apk
+*.ap_
+*.aab
+/mobile/ios/.symlinks/
+/mobile/ios/Pods/
+/mobile/ios/Flutter/Generated.xcconfig
+/mobile/ios/Flutter/flutter_export_environment.sh
