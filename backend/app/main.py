@@ -1,13 +1,14 @@
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-import models
-from database import engine, get_db
-import schemas
+from app import models, schemas, crud, database
+from app.database import engine, get_db
+from app import schemas
 from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
-from auth import crear_token_acceso, obtener_identidad_actual
-import crud
+from app.auth import crear_token_acceso, obtener_identidad_actual
+from app import crud
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
 app = FastAPI(
             title="Smat - Sistema de Monitoreo de Alerta Temprana",
@@ -43,7 +44,7 @@ app.add_middleware(
 )
 
 models.Base.metadata.create_all(bind=engine)
-app = FastAPI(title="Smat persistente")
+
 
 
 @app.get("/")
@@ -68,18 +69,15 @@ async def login_para_tener_acceso():
         description="Permite crear una nueva estación física solo a personal autorizado")
 def crear_estacion(estacion: schemas.EstacionCreate, db: Session = Depends(get_db),
                 usuario: str = Depends(obtener_identidad_actual)):
-    estacion_existente = db.query(models.Estacion).filter(models.Estacion.id== estacion.id).first()
+    estacion_existente = crud.obtener_estacion_por_id(db, estacion_id=estacion.id)
     if estacion_existente:
         raise HTTPException(
             status_code= 400,
             detail= f"La estación con el ID {estacion.id} ya se encuentra registrada."
         )
-    nueva_estacion = models.Estacion(id=estacion.id, nombre=estacion.nombre, ubicacion=estacion.ubicacion)
-    db.add(nueva_estacion)
-    db.commit()
-    db.refresh(nueva_estacion)
     
-    return nueva_estacion 
+    
+    return crud.crear_estacion_db(db=db, estacion=estacion)
 
 @app.get("/estaciones/stats",
          responses={
@@ -115,7 +113,7 @@ async def listar_estaciones(db: Session = Depends(get_db)):
         "estacion_con_lectura_mas_alta": estacion_record_alta if estacion_record_alta else "No hay lecturas registradas aún",
         
         
-        "estaciones": db.query(models.Estacion).all()
+        "estaciones": crud.obtener_todas_estaciones(db)
     }
 
 @app.post("/lectura/",status_code=201,
@@ -129,13 +127,11 @@ async def listar_estaciones(db: Session = Depends(get_db)):
         summary="Recibir datos de telemetría",
         description="Recibe el valor capturado por un sensor y lo víncula a una estación existente medante su ID")
 def registrar_lectura(lectura: schemas.LecturaCreate, db: Session = Depends(get_db)):
-    estacion = db.query(models.Estacion).filter(models.Estacion.id == lectura.estacion_id).first()
+    estacion = crud.obtener_estacion_por_id(db, estacion_id=lectura.estacion_id)
     if not estacion:
         raise HTTPException(status_code=404, detail="Estación no existe")
-    nueva_lectura = models.LecturaDB(valor=lectura.valor, estacion_id=lectura.estacion_id)
-    db.add(nueva_lectura)
-    db.commit()
-    return {"status": "Lectura guardada en DB"}
+    crud.crear_lectura_db (db=db, lectura=lectura)
+    return{"status": "Lectura guardadad en DB"}
 
 @app.get("/estaciones/{id}/riesgo",
          responses = {
@@ -147,11 +143,11 @@ def registrar_lectura(lectura: schemas.LecturaCreate, db: Session = Depends(get_
          summary="Evaluar nivel de peligro actual de una estación",
          description="Analiza la última lectura registrada para una estación específica y determina si el estado es 'Normal', 'Alerta' o 'Peligro' basado en umbrales predefinidos")
 async def obtener_riesgo_estacion(id: int, db: Session = Depends(get_db)):
-    estacion_existe = db.query(models.Estacion).filter(models.Estacion.id == id).first()
+    estacion_existe = crud.obtener_estacion_por_id(db, estacion_id=id)
     if not estacion_existe:
         raise HTTPException(status_code=404, detail="Estación no encontrada")
 
-    lecturas = db.query(models.LecturaDB).filter(models.LecturaDB.estacion_id == id).all()
+    lecturas = crud.obtener_lecturas_por_estacion(db, estacion_id=id)
     if not lecturas:
         return {"id": id, "nivel": "SIN DATOS", "valor": 0}
     
@@ -177,7 +173,7 @@ async def obtener_historial_estacion(id: int, db: Session = Depends(get_db)):
     estacion_existe = db.query(models.LecturaDB).filter(models.LecturaDB.estacion_id == id).first()
     if not estacion_existe:
         raise HTTPException(status_code=404, detail="Estación no encontrada")
-    lecturas = db.query(models.LecturaDB).filter(models.LecturaDB.estacion_id == id).all()
+    lecturas = crud.verificar_existencia_lectura_estacion(db, estacion_id=id)
     numero_lecturas = len(lecturas)
     if numero_lecturas == 0:
         media = 0
@@ -190,3 +186,9 @@ async def obtener_historial_estacion(id: int, db: Session = Depends(get_db)):
 def health_check():
     return {"check": "Servicios Cloud operativos"}
 
+@app.post("/token",
+        tags=["Autenticación"],
+        summary="Obtener token de acceso",  
+        description="Genera un token JWT de acceso para autenticación en endpoints protegidos")
+async def login_para_tener_acceso(form_data: OAuth2PasswordRequestForm = Depends()):
+    return {"access_token": crear_token_acceso({"sub": form_data.username}), "token_type": "bearer"}

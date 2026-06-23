@@ -1,7 +1,7 @@
 from jose import JWTError, jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 SECRET_KEY = "OCEANO"
 ALGORITHM = "HS256"
@@ -11,7 +11,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 def crear_token_acceso(data:dict):
     para_encriptar = data.copy()
-    expiracion = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expiracion = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     para_encriptar.update({"exp": expiracion})
     return jwt.encode(para_encriptar, SECRET_KEY, algorithm=ALGORITHM)
 
