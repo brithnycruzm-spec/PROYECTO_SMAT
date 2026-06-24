@@ -1,13 +1,13 @@
+
 from fastapi import Depends, FastAPI, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app import models, schemas, crud, database
 from app.database import engine, get_db
-from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
 from app.auth import crear_token_acceso, obtener_identidad_actual
 from app import crud
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm
 
 app = FastAPI(
     title="Smat - Sistema de Monitoreo de Alerta Temprana",
@@ -67,175 +67,129 @@ async def root():
 # ─────────────────────────────────────────────────────────────
 # ENDPOINT DE LOGIN — único, corregido
 # ─────────────────────────────────────────────────────────────
-@app.post(
-    "/token",
-    tags=["Autenticación"],
-    summary="Obtener token de acceso",
-    description="Valida las credenciales del usuario y genera un token JWT. "
-                "Usa usuario: **yo** / contraseña: **123456** para probar.",
-)
-async def login_para_tener_acceso(form_data: OAuth2PasswordRequestForm = Depends()):
-    # 1. Verificar que el usuario existe
+@app.post("/token", tags=["Autenticación"], summary="Obtener token de acceso")
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     password_correcta = USUARIOS_VALIDOS.get(form_data.username)
-
-    # 2. Verificar que la contraseña coincide
     if password_correcta is None or form_data.password != password_correcta:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuario o contraseña incorrectos",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
-    # 3. Credenciales correctas → generar token con el username real
     token = crear_token_acceso({"sub": form_data.username})
     return {"access_token": token, "token_type": "bearer"}
-
-
-@app.post(
-    "/estaciones/",
-    status_code=201,
-    responses={
-        201: {"description": "Estación creada exitosamente"},
-        400: {"description": "Solicitud inválida"},
-        500: {"description": "Error interno del servidor"},
-    },
+ 
+# ── Estaciones: crear ────────────────────────────────────────
+@app.post("/estaciones/", status_code=201,
     tags=["Gestión de Estaciones"],
-    summary="Registrar una nueva estación de monitoreo",
-    description="Permite crear una nueva estación física solo a personal autorizado",
-)
+    summary="Registrar nueva estación (requiere token)")
 def crear_estacion(
     estacion: schemas.EstacionCreate,
     db: Session = Depends(get_db),
     usuario: str = Depends(obtener_identidad_actual),
 ):
-    estacion_existente = crud.obtener_estacion_por_id(db, estacion_id=estacion.id)
-    if estacion_existente:
-        raise HTTPException(
-            status_code=400,
-            detail=f"La estación con el ID {estacion.id} ya se encuentra registrada.",
-        )
+    if crud.obtener_estacion_por_id(db, estacion_id=estacion.id):
+        raise HTTPException(status_code=400,
+            detail=f"La estación con ID {estacion.id} ya existe.")
     return crud.crear_estacion_db(db=db, estacion=estacion)
-
-
-@app.get(
-    "/estaciones/stats",
-    responses={
-        200: {"description": "Resumen ejecutivo obtenido exitosamente"},
-        500: {"description": "Error interno del servidor"},
-    },
+ 
+# ── Estaciones: listar con stats y última lectura ─────────────
+@app.get("/estaciones/stats",
     tags=["Gestión de Estaciones"],
-    summary="Listar todas las estaciones registradas con estadísticas",
-    description="Devuelve la cantidad total de estaciones, el listado y la estación con la lectura más alta.",
-)
+    summary="Listar estaciones con estadísticas y última lectura")
 async def listar_estaciones(db: Session = Depends(get_db)):
-    total_estaciones = db.query(models.Estacion).count()
-
-    lectura_maxima = db.query(func.max(models.LecturaDB.valor)).scalar()
-    estacion_record_alta = None
-
-    if lectura_maxima is not None:
-        registro_maximo = (
-            db.query(models.LecturaDB)
-            .filter(models.LecturaDB.valor == lectura_maxima)
-            .first()
-        )
-        if registro_maximo:
-            estacion_obj = (
-                db.query(models.Estacion)
-                .filter(models.Estacion.id == registro_maximo.estacion_id)
-                .first()
-            )
-            if estacion_obj:
-                estacion_record_alta = {
-                    "estacion_id": estacion_obj.id,
-                    "nombre": estacion_obj.nombre,
-                    "lectura_mas_alta": lectura_maxima,
-                }
-
+    total = db.query(models.Estacion).count()
+    lectura_max = db.query(func.max(models.LecturaDB.valor)).scalar()
+    record = None
+    if lectura_max is not None:
+        reg = db.query(models.LecturaDB).filter(
+            models.LecturaDB.valor == lectura_max).first()
+        if reg:
+            est = db.query(models.Estacion).filter(
+                models.Estacion.id == reg.estacion_id).first()
+            if est:
+                record = {"estacion_id": est.id, "nombre": est.nombre,
+                          "lectura_mas_alta": lectura_max}
+ 
+    # Incluir la última lectura de cada estación para el color del ícono
+    estaciones_raw = crud.obtener_todas_estaciones(db)
+    estaciones = []
+    for e in estaciones_raw:
+        ultima = crud.obtener_ultima_lectura(db, e.id)
+        estaciones.append({
+            "id": e.id,
+            "nombre": e.nombre,
+            "ubicacion": e.ubicacion,
+            "ultima_lectura": ultima.valor if ultima else None,
+        })
+ 
     return {
-        "cantidad_total_estaciones": total_estaciones,
-        "estacion_con_lectura_mas_alta": estacion_record_alta
-        if estacion_record_alta
-        else "No hay lecturas registradas aún",
-        "estaciones": crud.obtener_todas_estaciones(db),
+        "cantidad_total_estaciones": total,
+        "estacion_con_lectura_mas_alta": record or "No hay lecturas registradas aún",
+        "estaciones": estaciones,
     }
-
-
-@app.post(
-    "/lectura/",
-    status_code=201,
-    responses={
-        201: {"description": "Lectura registrada exitosamente"},
-        400: {"description": "Solicitud inválida"},
-        404: {"description": "Estación no encontrada"},
-        500: {"description": "Error interno del servidor"},
-    },
-    tags=["Telemetría de Sensores"],
-    summary="Recibir datos de telemetría",
-    description="Recibe el valor capturado por un sensor y lo vincula a una estación existente mediante su ID",
-)
-def registrar_lectura(lectura: schemas.LecturaCreate, db: Session = Depends(get_db)):
-    estacion = crud.obtener_estacion_por_id(db, estacion_id=lectura.estacion_id)
+ 
+# ── Estaciones: actualizar ───────────────────────────────────
+@app.put("/estaciones/{id}",
+    tags=["Gestión de Estaciones"],
+    summary="Actualizar nombre y ubicación de una estación (requiere token)")
+def actualizar_estacion(
+    id: int,
+    datos: schemas.EstacionUpdate,
+    db: Session = Depends(get_db),
+    usuario: str = Depends(obtener_identidad_actual),
+):
+    estacion = crud.actualizar_estacion_db(db, estacion_id=id, datos=datos)
     if not estacion:
+        raise HTTPException(status_code=404, detail="Estación no encontrada")
+    return estacion
+ 
+# ── Estaciones: eliminar ─────────────────────────────────────
+@app.delete("/estaciones/{id}",
+    tags=["Gestión de Estaciones"],
+    summary="Eliminar una estación y sus lecturas (requiere token)")
+def eliminar_estacion(
+    id: int,
+    db: Session = Depends(get_db),
+    usuario: str = Depends(obtener_identidad_actual),
+):
+    eliminado = crud.eliminar_estacion_db(db, estacion_id=id)
+    if not eliminado:
+        raise HTTPException(status_code=404, detail="Estación no encontrada")
+    return {"mensaje": f"Estación {id} eliminada correctamente"}
+ 
+# ── Lecturas ─────────────────────────────────────────────────
+@app.post("/lectura/", status_code=201,
+    tags=["Telemetría de Sensores"],
+    summary="Registrar lectura de sensor")
+def registrar_lectura(lectura: schemas.LecturaCreate, db: Session = Depends(get_db)):
+    if not crud.obtener_estacion_por_id(db, estacion_id=lectura.estacion_id):
         raise HTTPException(status_code=404, detail="Estación no existe")
     crud.crear_lectura_db(db=db, lectura=lectura)
     return {"status": "Lectura guardada en DB"}
-
-
-@app.get(
-    "/estaciones/{id}/riesgo",
-    responses={
-        200: {"description": "Nivel de riesgo obtenido exitosamente"},
-        404: {"description": "Estación no encontrada"},
-        500: {"description": "Error interno del servidor"},
-    },
+ 
+# ── Riesgo ───────────────────────────────────────────────────
+@app.get("/estaciones/{id}/riesgo",
     tags=["Análisis de Riesgo"],
-    summary="Evaluar nivel de peligro actual de una estación",
-    description="Analiza la última lectura registrada y determina si el estado es 'Normal', 'Alerta' o 'Peligro'",
-)
-async def obtener_riesgo_estacion(id: int, db: Session = Depends(get_db)):
-    estacion_existe = crud.obtener_estacion_por_id(db, estacion_id=id)
-    if not estacion_existe:
+    summary="Evaluar nivel de peligro de una estación")
+async def obtener_riesgo(id: int, db: Session = Depends(get_db)):
+    if not crud.obtener_estacion_por_id(db, estacion_id=id):
         raise HTTPException(status_code=404, detail="Estación no encontrada")
-
     lecturas = crud.obtener_lecturas_por_estacion(db, estacion_id=id)
     if not lecturas:
         return {"id": id, "nivel": "SIN DATOS", "valor": 0}
-
-    ultima_lectura = lecturas[-1].valor
-    if ultima_lectura > 20:
-        nivel = "Peligro"
-    elif ultima_lectura > 10:
-        nivel = "Alerta"
-    else:
-        nivel = "Normal"
-    return {"id": id, "nivel": nivel, "valor": ultima_lectura}
-
-
-@app.get(
-    "/estaciones/{id}/historial",
-    responses={
-        200: {"description": "Historial de lecturas obtenido exitosamente"},
-        404: {"description": "Estación no encontrada"},
-        500: {"description": "Error interno del servidor"},
-    },
+    ultima = lecturas[-1].valor
+    nivel = "Peligro" if ultima > 20 else "Alerta" if ultima > 10 else "Normal"
+    return {"id": id, "nivel": nivel, "valor": ultima}
+ 
+# ── Historial ────────────────────────────────────────────────
+@app.get("/estaciones/{id}/historial",
     tags=["Análisis de Riesgo"],
-    summary="Obtener historial de lecturas y nivel de riesgo promedio",
-    description="Proporciona un resumen del historial de lecturas y calcula el nivel de riesgo promedio",
-)
-async def obtener_historial_estacion(id: int, db: Session = Depends(get_db)):
-    estacion_existe = (
-        db.query(models.LecturaDB).filter(models.LecturaDB.estacion_id == id).first()
-    )
-    if not estacion_existe:
+    summary="Historial de lecturas y riesgo promedio")
+async def obtener_historial(id: int, db: Session = Depends(get_db)):
+    if not db.query(models.LecturaDB).filter(models.LecturaDB.estacion_id == id).first():
         raise HTTPException(status_code=404, detail="Estación no encontrada")
-
     lecturas = crud.obtener_lecturas_por_estacion(db, estacion_id=id)
-    numero_lecturas = len(lecturas)
-    media = sum(l.valor for l in lecturas) / numero_lecturas if numero_lecturas else 0
-    return {"media": media, "lecturas": lecturas, "numero_lecturas": numero_lecturas}
-
-
-@app.get("/health")
-def health_check():
-    return {"check": "Servicios Cloud operativos"}
+    n = len(lecturas)
+    media = sum(l.valor for l in lecturas) / n if n else 0
+    return {"media": media, "lecturas": lecturas, "numero_lecturas": n}
