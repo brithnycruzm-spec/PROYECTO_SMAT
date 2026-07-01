@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  # Servicio 1: Servidor API (FastAPI)
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - smat_sqlite_data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:////app/data/smat.db
+    # SOLUCIÓN AL RETO: Control de salud de la API
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 5s     # Ejecuta la prueba cada 5 segundos
+      timeout: 3s      # Tiempo máximo de espera para cada intento de prueba
+      retries: 3       # Número de fallas consecutivas antes de declarar "unhealthy"
+
+  # Servicio 2: Traductor de protocolos IoT (MQTT a HTTP API)
+  mqtt_bridge:
+    build: ./iot_device
+    depends_on:
+      backend:
+        condition: service_healthy # Esperará obligatoriamente a que el Healthcheck del backend de OK
+    environment:
+      - API_URL=http://backend:8000/lecturas/
+      - JWT_TOKEN=tu_token_jwt_aqui
+
+volumes:
+  # Volumen persistente para que la base de datos SQLite no se borre al apagar los contenedores
+  smat_sqlite_data:

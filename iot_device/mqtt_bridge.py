@@ -3,9 +3,10 @@ import json
 import time
 import requests
 import paho.mqtt.client as mqtt
+import os
 
 # ── CONFIGURACIÓN ─────────────────────────────────────────────
-API_URL   = "http://localhost:8000"
+API_URL     = os.environ.get("API_URL", "http://localhost:8000")
 MQTT_BROKER = "test.mosquitto.org"
 MQTT_PORT   = 1883
 MQTT_TOPIC  = "fisi/smat/estaciones/+/lecturas"   # '+' escucha TODAS las estaciones
