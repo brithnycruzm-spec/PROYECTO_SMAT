@@ -64,3 +64,32 @@ Thumbs.db
 /mobile/ios/Pods/
 /mobile/ios/Flutter/Generated.xcconfig
 /mobile/ios/Flutter/flutter_export_environment.sh
+
+# --- Configuración y Caché de Godot ---
+.godot/
+.import/
+export_presets.cfg
+
+# --- Archivos específicos de Mono/C# (Si usas C#) ---
+.mono/
+data_*/
+mono_crash_*.log
+*.csproj
+*.sln
+
+# --- Archivos de configuración del Editor/Usuario ---
+.user/
+*.translation
+
+# --- Binarios y Exports (Crea una carpeta 'builds' para tus ejecutables) ---
+builds/
+*.apk
+*.exe
+*.zip
+*.dmg
+
+# --- Archivos del Sistema y Editores Externos ---
+.DS_Store
+.vscode/
+.idea/
+*.log
