@@ -1,0 +1,22 @@
+[gd_scene format=3 uid="uid://c4rtwdyuxy54m"]
+
+[ext_resource type="PackedScene" uid="uid://3lav8rtr738o" path="res://scenes/estacionsensor.tscn" id="1_bi3rc"]
+[ext_resource type="Script" uid="uid://yl6v4y3hj5in" path="res://scenes/dashboard.gd" id="1_nysx1"]
+[ext_resource type="Texture2D" uid="uid://b2axf3xp4iagg" path="res://Rio_Santa.jpg" id="2_meibj"]
+[ext_resource type="Script" uid="uid://cvmho2m3epttn" path="res://scenes/mqtt.gd" id="4_gj1ct"]
+
+[node name="Dashboard" type="Node2D" unique_id=1541160458]
+script = ExtResource("1_nysx1")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=642438830]
+position = Vector2(-8, 6.1035156e-05)
+scale = Vector2(0.2250817, 0.2198401)
+texture = ExtResource("2_meibj")
+
+[node name="Camera2D" type="Camera2D" parent="Sprite2D" unique_id=1422795008]
+position = Vector2(-0.00024414063, -38.66449)
+
+[node name="MQTTClient" type="Node" parent="." unique_id=119205295]
+script = ExtResource("4_gj1ct")
+
+[node name="Estacion_1" parent="." unique_id=752528782 instance=ExtResource("1_bi3rc")]

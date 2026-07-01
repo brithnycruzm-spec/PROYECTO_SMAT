@@ -1,0 +1,16 @@
+[gd_scene format=3 uid="uid://3lav8rtr738o"]
+
+[ext_resource type="Script" uid="uid://str2anaw1hf8" path="res://scenes/estacionsensor.gd" id="1_6pu4n"]
+[ext_resource type="Texture2D" uid="uid://d1q57yvbwb08d" path="res://pngwing.com.png" id="1_xgum8"]
+
+[node name="Estacion_1" type="Node2D" unique_id=752528782]
+script = ExtResource("1_6pu4n")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1630515718]
+position = Vector2(237.85938, 80.25)
+scale = Vector2(0.46173972, 0.37687498)
+texture = ExtResource("1_xgum8")
+
+[node name="Label" type="Label" parent="." unique_id=1952877974]
+offset_right = 40.0
+offset_bottom = 23.0
